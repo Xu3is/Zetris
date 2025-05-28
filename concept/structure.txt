@@ -1,0 +1,35 @@
+tetris/
+│── assets/          
+│   ├── images/
+│   ├── sounds/
+│   ├── fonts/
+│── src/       
+│   ├── game/       
+│   │   ├── game.go         
+│   │   ├── update.go       
+│   │   ├── draw.go         
+│   ├── input/       
+│   │   ├── input.go
+│   ├── board/     
+│   │   ├── board.go        
+│   │   ├── tetromino.go    
+│   │   ├── collision.go    
+│   ├── ui/         
+│   │   ├── next.go        
+│   │   ├── stats.go        
+│   │   ├── pause.go        
+│   ├── state/       
+│   │   ├── state.go       
+│   │   ├── play.go         
+│   │   ├── gameover.go
+│   │   ├── pause.go     
+│── utilities/             
+│   ├── config/     
+│   │   ├── config.go
+│   ├── logger/     
+│   │   ├── logger.go
+│            
+│── main.go
+│── go.mod           
+│── go.sum           
+│── README.md        
