@@ -100,18 +100,18 @@ func (sm *SettingsMenu) Update() error {
 // Draw отрисовывает меню настроек
 func (sm *SettingsMenu) Draw(screen *ebiten.Image) {
 	overlay := ebiten.NewImage(ScreenWidth, ScreenHeight)
-	overlay.Fill(color.RGBA{0, 0, 0, 192})
+	overlay.Fill(color.RGBA{20, 30, 50, 192})
 	screen.DrawImage(overlay, &ebiten.DrawImageOptions{})
 
 	if sm.game.font != nil {
-		drawText(screen, "Настройки", ScreenWidth/2-70, ScreenHeight/2-150, color.White, sm.game.font)
+		drawText(screen, "Настройки", ScreenWidth/2-70, ScreenHeight/2-150, color.RGBA{180, 220, 255, 255}, sm.game.font, false)
 	}
 
 	for i, element := range sm.elements {
 		y := ScreenHeight/2 - 50 + i*40
-		var clr color.Color = color.White
+		var clr color.Color = color.RGBA{180, 220, 255, 255}
 		if i == sm.selectedIndex {
-			clr = color.RGBA{255, 255, 0, 255}
+			clr = color.RGBA{100, 200, 255, 255}
 		}
 		var text string
 		switch element {
@@ -123,7 +123,7 @@ func (sm *SettingsMenu) Draw(screen *ebiten.Image) {
 			text = "Применить"
 		}
 		if sm.game.font != nil {
-			drawText(screen, text, ScreenWidth/2-100, y, clr, sm.game.font)
+			drawText(screen, text, ScreenWidth/2-100, y, clr, sm.game.font, i == sm.selectedIndex)
 		}
 	}
 }

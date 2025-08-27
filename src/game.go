@@ -27,12 +27,17 @@ type SpeedLevel struct {
 	level     int
 }
 
+type HighScore struct {
+	Name  string
+	Score int
+}
+
 var speedLevels = []SpeedLevel{
-	{fallSpeed: 0.1, level: 1}, // Самая медленная
+	{fallSpeed: 0.1, level: 1},
 	{fallSpeed: 0.0667, level: 2},
 	{fallSpeed: 0.05, level: 3},
 	{fallSpeed: 0.04, level: 4},
-	{fallSpeed: 0.0333, level: 5}, // Самая быстрая
+	{fallSpeed: 0.0333, level: 5},
 }
 
 type Game struct {
@@ -57,23 +62,37 @@ type Game struct {
 	menu               *Menu
 	pauseMenu          *PauseMenu
 	customMode         *CustomMode
+	enterName          *EnterNameScreen
+	highScoreScreen    *HighScoreScreen
 	isLimitedTo40Lines bool
 	isCustomSpeed      bool
 	clearedLines       int
 	menuPlayer         *audio.Player
 	customPlayer       *audio.Player
 	gamePlayer         *audio.Player
+	classicPlayerName  string
+	customPlayerName   string
+	classicNameEntered bool
+	customNameEntered  bool
+	classicHighScore   HighScore
+	customHighScore    HighScore
 }
 
 func NewGame() (*Game, error) {
 	g := &Game{
-		fallSpeed:     speedLevels[0].fallSpeed,
-		images:        make(map[string]*ebiten.Image),
-		lastUpdate:    time.Now(),
-		keyLastAction: make(map[ebiten.Key]time.Time),
-		keyPressStart: make(map[ebiten.Key]time.Time),
-		state:         StateMenu,
-		lastState:     StateMenu,
+		fallSpeed:          speedLevels[0].fallSpeed,
+		images:             make(map[string]*ebiten.Image),
+		lastUpdate:         time.Now(),
+		keyLastAction:      make(map[ebiten.Key]time.Time),
+		keyPressStart:      make(map[ebiten.Key]time.Time),
+		state:              StateMenu,
+		lastState:          StateMenu,
+		classicPlayerName:  "",
+		customPlayerName:   "",
+		classicNameEntered: false,
+		customNameEntered:  false,
+		classicHighScore:   HighScore{Name: "", Score: 0},
+		customHighScore:    HighScore{Name: "", Score: 0},
 	}
 	g.settingsMenu = NewSettingsMenu(g)
 	err := g.loadAssets()
@@ -84,6 +103,8 @@ func NewGame() (*Game, error) {
 	g.menu = NewMenu(g)
 	g.pauseMenu = NewPauseMenu(g)
 	g.customMode = NewCustomMode(g)
+	g.enterName = NewEnterNameScreen(g)
+	g.highScoreScreen = NewHighScoreScreen(g)
 	g.currentPiece = g.newPiece()
 	g.nextPiece = g.newPiece()
 	return g, nil
@@ -92,18 +113,19 @@ func NewGame() (*Game, error) {
 func (g *Game) Update() error {
 	// Управление музыкой при смене состояния
 	if g.state != g.lastState {
-		// Остановка всех плееров
 		if g.menuPlayer != nil && g.menuPlayer.IsPlaying() {
 			g.menuPlayer.Pause()
+			g.menuPlayer.Rewind()
 		}
 		if g.gamePlayer != nil && g.gamePlayer.IsPlaying() {
 			g.gamePlayer.Pause()
+			g.gamePlayer.Rewind()
 		}
 		if g.customPlayer != nil && g.customPlayer.IsPlaying() {
 			g.customPlayer.Pause()
+			g.customPlayer.Rewind()
 		}
 
-		// Запуск соответствующего плеера
 		switch g.state {
 		case StateMenu:
 			if g.menuPlayer != nil {
@@ -122,12 +144,27 @@ func (g *Game) Update() error {
 					g.gamePlayer.Play()
 				}
 			}
-		case StateCustomMode, StatePause, StateSettings:
+		case StateCustomMode, StatePause, StateSettings, StateEnterName, StateHighScore:
 			// Музыка не играет
 		}
 	}
 
-	// Обновление меню настроек
+	if g.state == StateEnterName {
+		err := g.enterName.Update()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if g.state == StateHighScore {
+		err := g.highScoreScreen.Update()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
 	if g.state == StateSettings {
 		err := g.settingsMenu.Update()
 		if err != nil {
@@ -136,7 +173,6 @@ func (g *Game) Update() error {
 		return nil
 	}
 
-	// Обновление главного меню
 	if g.state == StateMenu {
 		err := g.menu.Update()
 		if err != nil {
@@ -145,7 +181,6 @@ func (g *Game) Update() error {
 		return nil
 	}
 
-	// Обновление паузы
 	if g.state == StatePause {
 		err := g.pauseMenu.Update()
 		if err != nil {
@@ -154,7 +189,6 @@ func (g *Game) Update() error {
 		return nil
 	}
 
-	// Обновление пользовательского режима
 	if g.state == StateCustomMode {
 		err := g.customMode.Update()
 		if err != nil {
@@ -163,8 +197,13 @@ func (g *Game) Update() error {
 		return nil
 	}
 
-	// Обновление игры
 	if g.isGameOver {
+		if g.isLimitedTo40Lines && g.score > g.classicHighScore.Score {
+			g.classicHighScore = HighScore{Name: g.classicPlayerName, Score: g.score}
+		} else if g.isCustomSpeed && g.score > g.customHighScore.Score {
+			g.customHighScore = HighScore{Name: g.customPlayerName, Score: g.score}
+		}
+
 		if inpututil.IsKeyJustPressed(ebiten.KeyR) {
 			g.grid = [gridHeight][gridWidth]string{}
 			g.currentPiece = g.newPiece()
@@ -177,6 +216,7 @@ func (g *Game) Update() error {
 			g.keyLastAction = make(map[ebiten.Key]time.Time)
 			g.keyPressStart = make(map[ebiten.Key]time.Time)
 			g.clearedLines = 0
+			g.state = StateGame
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
 			g.state = StateMenu
@@ -353,6 +393,9 @@ func (g *Game) clearLines() {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	// Установка сине-ночного фона
+	screen.Fill(color.RGBA{20, 30, 50, 255})
+
 	if g.state == StateSettings {
 		g.settingsMenu.Draw(screen)
 		return
@@ -370,10 +413,26 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		g.customMode.Draw(screen)
 		return
 	}
+	if g.state == StateEnterName {
+		g.enterName.Draw(screen)
+		return
+	}
+	if g.state == StateHighScore {
+		g.highScoreScreen.Draw(screen)
+		return
+	}
 
 	offsetX := (ScreenWidth - gridWidth*cellSize) / 2
 	offsetY := (ScreenHeight - gridHeight*cellSize) / 2
 
+	// Отрисовка рамки вокруг игрового поля
+	border := ebiten.NewImage(gridWidth*cellSize+4, gridHeight*cellSize+4)
+	border.Fill(color.RGBA{100, 150, 200, 255}) // Светло-голубая рамка
+	borderOp := &ebiten.DrawImageOptions{}
+	borderOp.GeoM.Translate(float64(offsetX-2), float64(offsetY-2))
+	screen.DrawImage(border, borderOp)
+
+	// Отрисовка игрового поля
 	for i := 0; i < gridHeight; i++ {
 		for j := 0; j < gridWidth; j++ {
 			op := &ebiten.DrawImageOptions{}
@@ -386,6 +445,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 	}
 
+	// Отрисовка текущей фигуры
 	for i, row := range g.currentPiece.shape {
 		for j, cell := range row {
 			if cell != 0 {
@@ -398,29 +458,53 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	if g.isGameOver {
 		overlay := ebiten.NewImage(ScreenWidth, ScreenHeight)
-		overlay.Fill(color.RGBA{0, 0, 0, 192})
+		overlay.Fill(color.RGBA{20, 30, 50, 192})
 		op := &ebiten.DrawImageOptions{}
 		screen.DrawImage(overlay, op)
 
 		if g.isLimitedTo40Lines && g.clearedLines >= 40 {
 			if g.font != nil {
-				drawText(screen, "Вы выиграли!", ScreenWidth/2-80, ScreenHeight/2-100, color.White, g.font)
+				// Центрирование текста
+				winText := "Вы выиграли!"
+				w, _ := text.Measure(winText, g.font, 24)
+				drawText(screen, winText, ScreenWidth/2-int(w/2), ScreenHeight/2-100, color.RGBA{180, 220, 255, 255}, g.font, false)
 			}
 		} else {
 			if g.font != nil {
-				drawText(screen, "Вы проиграли!", ScreenWidth/2-80, ScreenHeight/2-100, color.White, g.font)
+				// Центрирование текста
+				loseText := "Вы проиграли!"
+				w, _ := text.Measure(loseText, g.font, 24)
+				drawText(screen, loseText, ScreenWidth/2-int(w/2), ScreenHeight/2-100, color.RGBA{180, 220, 255, 255}, g.font, false)
 			}
 		}
 		if g.font != nil {
-			drawText(screen, fmt.Sprintf("Итоговый счёт: %d", g.score), ScreenWidth/2-80, ScreenHeight/2-60, color.White, g.font)
-			drawText(screen, fmt.Sprintf("Очищено линий: %d", g.clearedLines), ScreenWidth/2-80, ScreenHeight/2-20, color.White, g.font)
-			drawText(screen, "R: Перезапустить", ScreenWidth/2-80, ScreenHeight/2+20, color.White, g.font)
-			drawText(screen, "Q: В меню", ScreenWidth/2-80, ScreenHeight/2+60, color.White, g.font)
+			// Центрирование текста
+			scoreText := fmt.Sprintf("Итоговый счёт: %d", g.score)
+			w, _ := text.Measure(scoreText, g.font, 24)
+			drawText(screen, scoreText, ScreenWidth/2-int(w/2), ScreenHeight/2-60, color.RGBA{180, 220, 255, 255}, g.font, false)
+
+			linesText := fmt.Sprintf("Очищено линий: %d", g.clearedLines)
+			w, _ = text.Measure(linesText, g.font, 24)
+			drawText(screen, linesText, ScreenWidth/2-int(w/2), ScreenHeight/2-20, color.RGBA{180, 220, 255, 255}, g.font, false)
+
+			restartText := "R: Перезапустить"
+			w, _ = text.Measure(restartText, g.font, 24)
+			drawText(screen, restartText, ScreenWidth/2-int(w/2), ScreenHeight/2+20, color.RGBA{180, 220, 255, 255}, g.font, false)
+
+			menuText := "Q: В меню"
+			w, _ = text.Measure(menuText, g.font, 24)
+			drawText(screen, menuText, ScreenWidth/2-int(w/2), ScreenHeight/2+60, color.RGBA{180, 220, 255, 255}, g.font, false)
 		}
 	} else if !g.isPaused {
 		if g.font != nil {
-			drawText(screen, fmt.Sprintf("Счёт: %d", g.score), ScreenWidth-150, 30, color.White, g.font)
-			drawText(screen, fmt.Sprintf("Очищено линий: %d", g.clearedLines), ScreenWidth-150, 60, color.White, g.font)
+			// Центрирование текста "Счёт"
+			scoreText := fmt.Sprintf("Счёт: %d", g.score)
+			w, _ := text.Measure(scoreText, g.font, 24)
+			drawText(screen, scoreText, ScreenWidth/2-int(w/2), 30, color.RGBA{180, 220, 255, 255}, g.font, false)
+			// Центрирование текста "Для паузы"
+			pauseText := "Для паузы нажмите Esc"
+			w, _ = text.Measure(pauseText, g.font, 24)
+			drawText(screen, pauseText, ScreenWidth/2-int(w/2), ScreenHeight-30, color.RGBA{180, 220, 255, 255}, g.font, false)
 		}
 	}
 }
@@ -430,6 +514,12 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func (g *Game) start40Lines() {
+	if !g.classicNameEntered {
+		g.state = StateEnterName
+		g.enterName.nextState = StateGame
+		g.enterName.isCustomMode = false
+		return
+	}
 	g.grid = [gridHeight][gridWidth]string{}
 	g.currentPiece = g.newPiece()
 	g.nextPiece = g.newPiece()

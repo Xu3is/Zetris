@@ -6,13 +6,28 @@ import (
 	"image/color"
 )
 
-// drawText отрисовывает текст с заданным шрифтом и цветом
-func drawText(screen *ebiten.Image, str string, x, y int, clr color.Color, font *text.GoTextFace) {
+// drawText отрисовывает текст с заданным шрифтом, цветом и тенью
+func drawText(screen *ebiten.Image, str string, x, y int, clr color.Color, font *text.GoTextFace, isSelected bool) {
 	if font != nil {
+		// Отрисовка тени (смещение на 2 пикселя вниз и вправо)
+		shadowOp := &text.DrawOptions{}
+		shadowOp.GeoM.Translate(float64(x+2), float64(y+2))
+		shadowColor := color.RGBA{0, 0, 0, 128} // Полупрозрачная чёрная тень
+		var shadowColorScale ebiten.ColorScale
+		r, g, b, a := shadowColor.RGBA()
+		shadowColorScale.SetR(float32(r) / 0xffff)
+		shadowColorScale.SetG(float32(g) / 0xffff)
+		shadowColorScale.SetB(float32(b) / 0xffff)
+		shadowColorScale.SetA(float32(a) / 0xffff)
+		shadowOp.ColorScale = shadowColorScale
+		shadowOp.LineSpacing = 24
+		text.Draw(screen, str, font, shadowOp)
+
+		// Отрисовка основного текста
 		op := &text.DrawOptions{}
 		op.GeoM.Translate(float64(x), float64(y))
 		var colorScale ebiten.ColorScale
-		r, g, b, a := clr.RGBA()
+		r, g, b, a = clr.RGBA()
 		colorScale.SetR(float32(r) / 0xffff)
 		colorScale.SetG(float32(g) / 0xffff)
 		colorScale.SetB(float32(b) / 0xffff)

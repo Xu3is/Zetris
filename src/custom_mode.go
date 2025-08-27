@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"image/color"
 	"time"
 )
@@ -65,6 +66,12 @@ func (cm *CustomMode) Update() error {
 	}
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && cm.selectedIndex == 2 {
+		if !cm.game.customNameEntered {
+			cm.game.state = StateEnterName
+			cm.game.enterName.nextState = StateGame
+			cm.game.enterName.isCustomMode = true
+			return nil
+		}
 		cm.game.grid = [gridHeight][gridWidth]string{}
 		cm.game.currentPiece = cm.game.newPiece()
 		cm.game.nextPiece = cm.game.newPiece()
@@ -91,38 +98,47 @@ func (cm *CustomMode) Update() error {
 // Draw отрисовывает пользовательский режим
 func (cm *CustomMode) Draw(screen *ebiten.Image) {
 	overlay := ebiten.NewImage(ScreenWidth, ScreenHeight)
-	overlay.Fill(color.RGBA{0, 0, 0, 192})
+	overlay.Fill(color.RGBA{20, 30, 50, 192})
 	screen.DrawImage(overlay, &ebiten.DrawImageOptions{})
 
 	if cm.game.font != nil {
-		drawText(screen, "Пользовательский режим", ScreenWidth/2-120, ScreenHeight/2-150, color.White, cm.game.font)
-	}
-
-	for i, element := range cm.elements {
-		y := ScreenHeight/2 - 50 + i*40
-		var clr color.Color = color.White
-		if i == cm.selectedIndex {
-			clr = color.RGBA{255, 255, 0, 255}
+		// Создаём новый GoTextFace для заголовка с большим размером шрифта
+		headerFont := &text.GoTextFace{
+			Source: cm.game.font.Source,
+			Size:   25, // Увеличиваем размер шрифта для заголовка
 		}
-		var text string
-		switch element {
-		case "Ограничение линий":
-			if cm.isLimited {
-				text = "Ограничение линий: 40"
-			} else {
-				text = "Ограничение линий: Нет"
+		headerText := "Пользовательский режим"
+		headerY := ScreenHeight/2 - 100 // Аналогично highscore.go (Y=200)
+		drawText(screen, headerText, ScreenWidth/2-100, headerY, color.RGBA{180, 220, 255, 255}, headerFont, false)
+
+		// Отрисовка элементов меню под заголовком
+		for i, element := range cm.elements {
+			y := headerY + 80 + i*40 // Начинаем с отступа 40 пикселей от заголовка (Y=240, 280, 320)
+			var clr color.Color = color.RGBA{180, 220, 255, 255}
+			if i == cm.selectedIndex {
+				clr = color.RGBA{100, 200, 255, 255}
 			}
-		case "Скорость":
-			text = fmt.Sprintf("Скорость: Уровень %d", speedLevels[cm.speedLevel].level)
-		case "Начать":
-			text = "Начать"
+			var text string
+			switch element {
+			case "Ограничение линий":
+				if cm.isLimited {
+					text = "Ограничение линий: 40"
+				} else {
+					text = "Ограничение линий: Нет"
+				}
+			case "Скорость":
+				text = fmt.Sprintf("Скорость: Уровень %d", speedLevels[cm.speedLevel].level)
+			case "Начать":
+				text = "Начать"
+			}
+			drawText(screen, text, ScreenWidth/2-100, y, clr, cm.game.font, i == cm.selectedIndex)
 		}
-		if cm.game.font != nil {
-			drawText(screen, text, ScreenWidth/2-100, y, clr, cm.game.font)
-		}
-	}
-
-	if cm.game.font != nil {
-		drawText(screen, "Стрелки: Выбор/Изменение, Enter: Начать, Esc: В меню", ScreenWidth/2-200, ScreenHeight/2+150, color.White, cm.game.font)
+	} else {
+		// Запасной вариант, если шрифт не загружен
+		img := ebiten.NewImage(200, 24)
+		img.Fill(color.RGBA{180, 220, 255, 255})
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(ScreenWidth/2-100), float64(ScreenHeight/2-100))
+		screen.DrawImage(img, op)
 	}
 }
