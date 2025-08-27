@@ -130,37 +130,3 @@ func (g *Game) fixPiece() {
 		}
 	}
 }
-
-func (g *Game) clearLines() {
-	linesCleared := 0
-	for i := gridHeight - 1; i >= 0; i-- {
-		isFull := true
-		for j := 0; j < gridWidth; j++ {
-			if g.grid[i][j] == "" {
-				isFull = false
-				break
-			}
-		}
-		if isFull {
-			linesCleared++
-			for j := 0; j < gridWidth; j++ {
-				g.grid[i][j] = ""
-			}
-			for k := i; k > 0; k-- {
-				g.grid[k] = g.grid[k-1]
-			}
-			g.grid[0] = [gridWidth]string{}
-			i++
-		}
-	}
-	switch linesCleared {
-	case 1:
-		g.score += 100
-	case 2:
-		g.score += 400
-	case 3:
-		g.score += 700
-	case 4:
-		g.score += 1100
-	}
-}
